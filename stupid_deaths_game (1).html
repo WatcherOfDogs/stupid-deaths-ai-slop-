@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stupid Deaths Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+            /* Haunted Poker Table Felt */
+            background: radial-gradient(circle at center, #1a4a2b 0%, #0a2012 60%, #000000 100%);
+            color: #e2e8f0;
+        }
+        .perspective-1000 { perspective: 1000px; }
+        .transform-style-3d { transform-style: preserve-3d; }
+        .backface-hidden { backface-visibility: hidden; }
+        .rotate-y-180 { transform: rotateY(180deg); }
+        .flip-transition { transition: transform 0.6s cubic-bezier(0.4, 0.2, 0.2, 1); }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+        .animate-pulse-fast { animation: pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        
+        /* New Animations */
+        @keyframes burnUp {
+            0% { transform: scale(1) translateY(0); opacity: 1; filter: drop-shadow(0 0 0px #ff4500); }
+            30% { filter: drop-shadow(0 -10px 20px #ff4500) sepia(0.8) hue-rotate(-30deg); }
+            100% { transform: scale(0.6) translateY(-100px); opacity: 0; filter: drop-shadow(0 -50px 60px #ff0000) sepia(1) hue-rotate(-50deg) saturate(5) contrast(2); }
+        }
+        .animate-burn { animation: burnUp 0.8s ease-in forwards; pointer-events: none; }
+
+        @keyframes dealCard {
+            0% { transform: translate(100vw, -100vh) rotate(540deg) scale(0.3); opacity: 0; }
+            100% { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 1; }
+        }
+        .animate-deal { animation: dealCard 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+
+        /* Hide scrollbar for textarea */
+        textarea::-webkit-scrollbar { display: none; }
+        textarea { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="min-h-screen overflow-x-hidden">
+
+    <!-- SETUP VIEW -->
+    <div id="setup-view" class="min-h-screen flex flex-col items-center justify-center p-6">
+        <div class="max-w-md w-full bg-slate-800 p-8 rounded-xl shadow-2xl border-2 border-teal-500">
+            <div class="text-center mb-6">
+                <h1 class="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-orange-400 mb-2">
+                    STUPID DEATHS 💀
+                </h1>
+                <p class="text-slate-400">Enter player names (one per line) to begin.</p>
+            </div>
+            <textarea id="players-input" class="w-full h-48 bg-slate-900 border border-slate-700 rounded-lg p-3 text-slate-200 focus:outline-none focus:border-teal-500 mb-6 resize-none" placeholder="John&#10;Sarah&#10;Mike&#10;Emily..."></textarea>
+            <button id="btn-create-teams" class="w-full py-4 bg-gradient-to-r from-teal-600 to-teal-800 hover:from-teal-500 hover:to-teal-700 font-bold text-xl rounded-lg shadow-[0_0_15px_rgba(20,184,166,0.5)] transition-all active:scale-95">
+                Create Teams & Play!
+            </button>
+        </div>
+    </div>
+
+    <!-- GAME VIEW -->
+    <div id="game-view" class="hidden min-h-screen flex-col items-center p-4 md:p-8">
+        <div class="w-full max-w-6xl flex flex-col md:flex-row justify-between items-start gap-8 mb-8">
+            
+            <!-- Teams Sidebar -->
+            <div class="w-full md:w-1/4 bg-slate-800 rounded-xl p-4 border border-slate-700 shadow-xl">
+                <h2 class="text-xl font-bold mb-4 text-teal-400 uppercase tracking-widest text-center">Scoreboard</h2>
+                <div id="scoreboard-container" class="flex flex-col gap-3">
+                    <!-- Teams injected here -->
+                </div>
+            </div>
+
+            <!-- MAIN GAME AREA -->
+            <div class="w-full md:w-3/4 flex flex-col items-center">
+                
+                <div class="mb-6 text-center bg-black/40 px-8 py-3 rounded-full border border-green-900 shadow-[0_0_15px_rgba(0,0,0,0.8)]">
+                    <h2 class="text-2xl text-slate-300">
+                        Current Turn: <span id="current-team-name" class="font-bold text-red-500 text-3xl drop-shadow-[0_0_5px_rgba(239,68,68,0.8)]">Team 1</span>
+                    </h2>
+                    <p class="text-slate-500 text-sm uppercase tracking-widest mt-1">Question <span id="question-counter">1</span> of <span id="total-questions">50</span></p>
+                </div>
+
+                <!-- FLIP CARD -->
+                <div id="card-container" class="w-full max-w-2xl h-64 md:h-80 perspective-1000 cursor-pointer group animate-deal">
+                    <div id="card-inner" class="w-full h-full relative transform-style-3d flip-transition">
+                        <!-- FRONT OF CARD -->
+                        <div class="absolute w-full h-full backface-hidden bg-gradient-to-b from-neutral-900 via-stone-900 to-black rounded-2xl border-4 border-stone-600 shadow-[0_0_30px_rgba(0,0,0,0.9)] flex flex-col items-center justify-center p-6 text-center transition-transform group-hover:scale-[1.02] overflow-hidden">
+                            <!-- Spooky overlay pattern -->
+                            <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-transparent via-black/60 to-black rounded-xl pointer-events-none"></div>
+                            
+                            <span class="text-7xl mb-2 z-10 drop-shadow-[0_0_15px_rgba(255,0,0,0.6)]">💀</span>
+                            <span class="text-4xl mb-4 z-10 opacity-70">🗡️</span>
+                            
+                            <h3 class="text-3xl md:text-4xl font-black text-red-800 tracking-widest z-10 drop-shadow-[0_2px_2px_black] uppercase" style="font-family: serif;">Stupid Deaths</h3>
+                            <p class="text-stone-400 mt-4 animate-pulse z-10 text-sm font-bold tracking-widest">TAP TO REVEAL FATE</p>
+                        </div>
+                        <!-- BACK OF CARD -->
+                        <div class="absolute w-full h-full backface-hidden rotate-y-180 bg-[url('https://www.transparenttextures.com/patterns/aged-paper.png')] bg-amber-50 rounded-2xl border-4 border-amber-900 shadow-[inset_0_0_40px_rgba(120,50,0,0.4),0_10px_30px_rgba(0,0,0,0.8)] flex flex-col items-center justify-center p-8 text-center text-amber-950">
+                            <span class="text-4xl mb-2 drop-shadow-md">🪦</span>
+                            <h3 id="victim-name" class="text-2xl md:text-3xl font-black mb-2 drop-shadow-sm" style="font-family: serif;">Victim Name</h3>
+                            <p class="text-amber-800 font-bold uppercase tracking-widest text-sm border-t border-b border-amber-800 py-1 mt-2">How did they die?</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- INTERACTION AREA -->
+                <div id="interaction-area" class="w-full max-w-2xl mt-8 min-h-[200px]">
+                    <!-- Dynamic content injected here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- GAMEOVER VIEW -->
+    <div id="gameover-view" class="hidden min-h-screen flex-col items-center p-6">
+        <h1 class="text-5xl font-black text-teal-400 mt-12 mb-8">Game Over! 🪦</h1>
+        <div class="w-full max-w-2xl bg-slate-800 rounded-xl p-8 shadow-2xl border border-slate-700">
+            <h2 class="text-3xl font-bold mb-6 text-center text-orange-400">Final Scores</h2>
+            <div id="final-scores-container">
+                <!-- Scores injected here -->
+            </div>
+            <button onclick="window.location.reload()" class="mt-8 w-full py-3 bg-slate-700 hover:bg-slate-600 font-bold rounded-lg transition-colors">
+                Play Again
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- DATA ---
+        const RAW_TRIVIA = [
+            { person: "Aeschylus (Ancient Greek Playwright)", correct: "An eagle mistook his bald head for a rock and dropped a tortoise on it to crack its shell.", wrong1: "He tripped over his own toga and fell off a cliff during a dramatic monologue.", wrong2: "He choked on a single, perfectly spherical grape.", hint: "Look up.", points: 2 },
+            { person: "Hans Steininger (16th Century Mayor)", correct: "He tripped over his own 4.5-foot-long beard and broke his neck while fleeing a fire.", wrong1: "He got permanently stuck inside a giant barrel of beer during a festival.", wrong2: "He was accidentally shot by a ceremonial cannon that was packed with confetti.", hint: "A very personal tripping hazard.", points: 2 },
+            { person: "Chrysippus (Greek Stoic Philosopher)", correct: "He purportedly died of laughter after watching a donkey eat his prized figs.", wrong1: "He held his breath too long trying to prove a complex philosophical point.", wrong2: "He starved after stubbornly refusing to eat anything except raw honeycomb.", hint: "A fatal sense of humor.", points: 3 },
+            { person: "Sigurd the Mighty (9th Century Norse Earl)", correct: "He died from an infection caused by the bucktooth of a severed head he hung from his saddle.", wrong1: "He was crushed by his own longship while trying to enthusiastically launch it.", wrong2: "He slipped on a patch of ice and accidentally impaled himself on his own sword.", hint: "Revenge from beyond the grave.", points: 2 },
+            { person: "King Adolf Frederick of Sweden (1771)", correct: "He ate a massive meal ending with 14 servings of his favorite dessert, dying of severe indigestion.", wrong1: "He drowned in a luxurious royal bathhouse that had been filled with warm milk.", wrong2: "He was suffocated in his sleep by an overly extravagant, collapsing canopy bed.", hint: "The final course.", points: 2 },
+            { person: "Clement Vallandigham (19th Century Lawyer)", correct: "He accidentally shot himself while demonstrating to a jury how a murder victim might have done it.", wrong1: "He was crushed by a massive, falling bookshelf in the courthouse library.", wrong2: "He absentmindedly drank a bottle of courtroom ink, thinking it was his medicine.", hint: "A deadly demonstration.", points: 3 },
+            { person: "Franz Reichelt (1912 Inventor)", correct: "He jumped from the Eiffel Tower to test a wearable parachute suit that completely failed.", wrong1: "He was electrocuted by his own automated mustache-grooming machine.", wrong2: "He blew himself up trying to invent a completely smoke-free indoor firework.", hint: "A Parisian plummet.", points: 2 },
+            { person: "Garry Hoy (1993 Corporate Lawyer)", correct: "He fell to his death after throwing himself against a window to prove it was unbreakable (the frame gave way).", wrong1: "He was accidentally locked inside a highly secure bank vault over a long holiday weekend.", wrong2: "He tragically tripped and fell into an industrial paper shredder during an office party.", hint: "Shattered expectations.", points: 2 },
+            { person: "Draco (Ancient Athenian Lawgiver)", correct: "He was literally smothered to death by citizens throwing their cloaks and hats on him in appreciation.", wrong1: "He was crushed by a collapsing marble column that he had just proudly commissioned.", wrong2: "He accidentally consumed a highly poisonous mushroom that was meant to be used for ink.", hint: "Smothered by success.", points: 2 },
+            { person: "Pietro Aretino (16th Century Author)", correct: "He purportedly died of suffocation from laughing too hard at a bawdy joke.", wrong1: "He was chased off a low balcony by an incredibly angry mob of literary critics.", wrong2: "He was poisoned by a bitter rival using a toxic, needle-sharp quill pen.", hint: "Dying of amusement.", points: 2 },
+            { person: "Tycho Brahe (16th Century Astronomer)", correct: "His bladder ruptured because he was too polite to leave a royal dinner banquet to use the restroom.", wrong1: "His solid brass prosthetic nose fell off and caused a fatal heavy metal poisoning.", wrong2: "He stared directly at a solar eclipse for 4 hours to calculate its exact trajectory.", hint: "When you gotta go, you gotta go...", points: 3 },
+            { person: "Empedocles (Ancient Greek Philosopher)", correct: "He threw himself into an active volcano (Mount Etna) to convince his followers he had become an immortal god.", wrong1: "He tried to invent human flight by tying 50 live seagulls to his arms and jumping from a cliff.", wrong2: "He drank a goblet of liquid mercury believing it was the ultimate elixir of eternal youth.", hint: "A fiery ego trip.", points: 2 },
+            { person: "Pope Adrian IV (12th Century)", correct: "He choked to death on a single fly that flew into his mouth while he was taking a sip of wine.", wrong1: "He slipped on a newly polished Vatican marble floor and went sliding out a window.", wrong2: "He accidentally excommunicated himself and died of a sheer panic attack.", hint: "A tiny, buzzing assassin.", points: 2 },
+            { person: "Sir Arthur Aston (17th Century Commander)", correct: "He was beaten to death by enemy soldiers using his own wooden peg leg as a club.", wrong1: "He accidentally fired his own cannon backwards during a triumphant victory salute.", wrong2: "He fell into a vat of boiling tar while trying to overenthusiastically inspect the castle defenses.", hint: "Using his own support against him.", points: 3 },
+            { person: "Queen Sunanda Kumariratana (19th Century Siam)", correct: "Her royal boat capsized and onlookers let her drown because touching a queen was strictly punishable by death.", wrong1: "She demanded her carriage be pulled by wild tigers, which immediately turned on her.", wrong2: "She was crushed by a solid gold throne that was improperly assembled by nervous staff.", hint: "Lethal respect.", points: 2 },
+            { person: "Bobby Leach (Daredevil)", correct: "He survived going over Niagara Falls in a barrel, but died from complications after slipping on an orange peel.", wrong1: "He attempted to jump the Grand Canyon on a steam-powered bicycle.", wrong2: "He accidentally shot himself out of a circus cannon into a brick wall.", hint: "Defeated by citrus.", points: 2 },
+            { person: "King Henry I of England", correct: "He died of a sudden illness, supposedly from eating a 'surfeit of lampreys' (too many eel-like fish) against his doctor's orders.", wrong1: "He drowned in the moat of the Tower of London while sleepwalking.", wrong2: "He accidentally drank a goblet of molten wax thinking it was warm mead.", hint: "An eel-y bad meal.", points: 2 },
+            { person: "Qin Shi Huang (First Emperor of China)", correct: "He died from ingesting mercury pills, given to him by his alchemists to make him immortal.", wrong1: "He was crushed by a life-sized Terracotta Warrior falling over.", wrong2: "He starved after executing every chef in his palace for putting too much salt in his soup.", hint: "A heavy metal diet.", points: 3 },
+            { person: "King Alexander of Greece (1920)", correct: "He died of sepsis after being bitten by a pet Barbary macaque monkey while trying to break up a fight with his dog.", wrong1: "He fell out of a hot air balloon while waving to his subjects.", wrong2: "He choked on an extremely large, unpitted olive during a diplomatic dinner.", hint: "Primate problems.", points: 2 },
+            { person: "Thomas Urquhart (17th Century Writer)", correct: "He reportedly died in a fit of uncontrollable laughter upon hearing that Charles II had taken the throne.", wrong1: "He locked himself in his library and starved because he couldn't find the exit.", wrong2: "He drank an entire barrel of ink to 'absorb all the knowledge in the world'.", hint: "A royal joke.", points: 3 },
+            { person: "John of Bohemia (1346)", correct: "He was completely blind, but insisted on being tied to his horses and led into the Battle of Crécy to fight.", wrong1: "He fell off a castle wall because he refused to admit he needed glasses.", wrong2: "He accidentally challenged his own reflection in a mirror to a duel to the death.", hint: "A sightless skirmish.", points: 2 },
+            { person: "Jean-Baptiste Lully (17th Century Composer)", correct: "He violently struck his own toe with his heavy conducting staff, leading to fatal gangrene.", wrong1: "He deafened himself with cymbals and subsequently stepped in front of a runaway carriage.", wrong2: "He held a high note for so long his lungs completely gave out.", hint: "Keeping the beat too hard.", points: 2 },
+            { person: "Pythagoras (Ancient Greek Mathematician)", correct: "He refused to cross a field of fava beans to escape assassins because of his strict, bizarre religious rules against beans.", wrong1: "He got completely tangled in an abacus and strangled.", wrong2: "He jumped off a cliff because he realized pi was an irrational number.", hint: "A legume limitation.", points: 3 },
+            { person: "Zeuxis (Ancient Greek Painter)", correct: "He supposedly died laughing at the humorous way he painted the goddess Aphrodite based on an ugly old woman who commissioned it.", wrong1: "He fell off a high scaffolding because he stepped back to admire his own painting.", wrong2: "He ate a bowl of painted fruit because it looked so realistic.", hint: "Artistic amusement.", points: 2 },
+            { person: "George Plantagenet, Duke of Clarence (1478)", correct: "He was executed privately by being drowned in a butt (large barrel) of Malmsey wine.", wrong1: "He slipped on a royal seal and broke his neck on the throne steps.", wrong2: "He accidentally locked himself inside an iron maiden while playing hide-and-seek.", hint: "A vintage execution.", points: 2 },
+            { person: "Sir Francis Bacon (1626)", correct: "He died of pneumonia after standing in a freezing snowstorm to stuff a dead fowl with snow to see if it would preserve it.", wrong1: "He slipped on a slab of bacon in the royal kitchens.", wrong2: "He was struck by lightning while trying to invent the concept of electricity.", hint: "A chilling experiment.", points: 2 },
+            { person: "Julien Offray de La Mettrie (1751 Philosopher)", correct: "He died of a severe gastric illness after eating an enormous quantity of truffle pâté to show off to an ambassador.", wrong1: "He got his powdered wig caught in an early printing press.", wrong2: "He tried to prove humans didn't need oxygen and held his breath.", hint: "Showing off at dinner.", points: 2 },
+            { person: "William Huskisson (1830 Politician)", correct: "He became the world's first widely reported railway casualty after failing to get out of the way of 'Stephenson's Rocket' train.", wrong1: "He fell into the River Thames while dramatically pointing at a new bridge.", wrong2: "He was trampled by a horse because he was too busy reading a newspaper.", hint: "A modern locomotion mishap.", points: 3 },
+            { person: "King Martin of Aragon (1410)", correct: "He died from a lethal combination of severe indigestion from eating a whole goose, and uncontrollable laughter at a jester's joke.", wrong1: "He slipped on a jester's juggling balls and hit his head on the royal dining table.", wrong2: "He choked on a golden ring hidden in a celebratory cake.", hint: "A goose and a gag.", points: 2 },
+            { person: "François Vatel (17th Century Chef)", correct: "He committed suicide by running himself through with a sword because the seafood order for a massive royal banquet was late.", wrong1: "He was boiled alive in his own giant soup cauldron.", wrong2: "He accidentally baked himself into a giant, life-sized pastry cake.", hint: "Culinary perfectionism.", points: 3 },
+            { person: "Milo of Croton (Ancient Greek Wrestler)", correct: "He tried to tear a split tree apart with his bare hands, got them stuck in the trunk, and was eaten by wolves.", wrong1: "He tried to wrestle an angry bull completely naked and lost terribly.", wrong2: "He flexed his muscles so hard he actually burst a major artery.", hint: "Sticking his hands where they don't belong.", points: 2 },
+            { person: "Agathocles of Syracuse (289 BC)", correct: "He was murdered by being given a poisoned toothpick by an enemy, which he used after a meal.", wrong1: "He tripped over his own elaborate golden sandal laces and cracked his skull.", wrong2: "He drowned in a vat of olive oil he was trying to hide in.", hint: "Dental hygiene danger.", points: 2 },
+            { person: "Charles VIII of France (1498)", correct: "He struck his head on the lintel of a low door on his way to watch a tennis match, falling into a fatal coma.", wrong1: "He was accidentally hit directly in the face by a wildly served tennis ball.", wrong2: "He tripped over a loose floorboard while dancing at a royal ball.", hint: "Mind your head.", points: 2 },
+            { person: "James II of Scotland (1460)", correct: "He was killed when a cannon he was standing next to (because he loved artillery so much) exploded due to a misfire.", wrong1: "He accidentally locked himself in the royal armory and starved to death.", wrong2: "He fell out of a high tower window while trying to get a better view of a battle.", hint: "A blast from the past.", points: 3 },
+            { person: "Arius (4th Century Christian Priest)", correct: "He purportedly died in a public toilet when his bowels suddenly erupted and exited his body.", wrong1: "He fell into a large baptismal font and tragically couldn't swim.", wrong2: "He was crushed by a falling stained-glass window in his own church.", hint: "A horrific bathroom break.", points: 2 },
+            { person: "Sima Zhao (3rd Century Chinese General)", correct: "It was rumored he died of a sudden stroke brought on by uncontrollable laughter when he learned a political rival was defeated.", wrong1: "He fell off his horse while trying to shoot a tiny bird out of the sky.", wrong2: "He accidentally drank a cup of ink that he mistook for strong tea.", hint: "The last laugh.", points: 2 },
+            { person: "Eleazar Maccabeus (2nd Century BC)", correct: "He bravely stabbed an enemy war elephant from underneath, but was instantly crushed when the dead elephant fell directly on him.", wrong1: "He was trampled by a herd of panicked sheep during a chaotic battle.", wrong2: "He accidentally dropped his incredibly heavy shield on his own foot and died of shock.", hint: "A massive downfall.", points: 3 },
+            { person: "Pyrrhus of Epirus (272 BC)", correct: "While fighting in a city street, an old woman threw a roof tile at his head from a balcony, stunning him so he was easily killed.", wrong1: "He slipped on a patch of wet mud and impaled himself on his own spear.", wrong2: "He was trampled by his own war elephants after they got spooked by a mouse.", hint: "Death from above (by grandma).", points: 2 },
+            { person: "Li Po (8th Century Chinese Poet)", correct: "He supposedly drowned after falling out of his boat while trying to embrace the reflection of the moon in the Yangtze River.", wrong1: "He was crushed by an avalanche of parchment scrolls in his personal library.", wrong2: "He accidentally set his long beard on fire while writing poetry by candlelight.", hint: "A poetic drowning.", points: 2 },
+            { person: "Marcus Licinius Crassus (Roman General)", correct: "After his defeat, his captors purportedly poured molten gold down his throat as a symbol of his legendary greed.", wrong1: "He was crushed by a massive pile of gold coins he was trying to hoard.", wrong2: "He accidentally drank poison thinking it was a very expensive, rare wine.", hint: "A fatal taste for wealth.", points: 3 },
+            { person: "Emperor Valerian (Roman Emperor)", correct: "He was captured, used as a human footstool by the Persian king to mount his horse, and then reportedly flayed alive.", wrong1: "He tripped over his own massive purple imperial robes and fell down the Senate steps.", wrong2: "He was crushed by a collapsing statue of himself.", hint: "The ultimate humiliation.", points: 2 },
+            { person: "Allan Pinkerton (19th Century Detective)", correct: "He tripped on a pavement, bit his own tongue, and died of gangrene from the resulting infection.", wrong1: "He accidentally locked himself in a bank vault while testing its security.", wrong2: "He was shot by a prop gun during a theatrical demonstration.", hint: "A sharp slip of the tongue.", points: 2 },
+            { person: "King Charles II of Navarre (1387)", correct: "To cure an illness, he was wrapped in brandy-soaked linen, which caught fire when a servant used a candle to burn a loose thread.", wrong1: "He slipped on a banana peel imported at great expense and broke his neck.", wrong2: "He choked on a remarkably large, whole roasted quail.", hint: "A highly flammable remedy.", points: 3 },
+            { person: "Al-Musta'sim (13th Century Caliph)", correct: "The Mongols rolled him up in a carpet and trampled him to death with their horses because they believed spilling royal blood was bad luck.", wrong1: "He fell out of the highest window of his palace while trying to catch a runaway parrot.", wrong2: "He accidentally drank a goblet of liquid gold meant for crafting jewelry.", hint: "A rugged execution.", points: 2 },
+            { person: "William the Conqueror (1087)", correct: "His horse unexpectedly reared up, throwing him violently against the metal pommel of his saddle and lethally rupturing his intestines.", wrong1: "He tripped over his own sword sheath while dismounting to accept a surrender.", wrong2: "He choked on a piece of tough venison during a victory feast.", hint: "Saddled with a fatal injury.", points: 2 },
+            { person: "Mary Ward (1869 Scientist)", correct: "She fell out of an experimental steam-powered carriage built by her cousins and was instantly crushed by its heavy iron wheels.", wrong1: "She was blown up when her experimental telescope exploded.", wrong2: "She accidentally ingested toxic chemicals while trying to invent a new cleaning fluid.", hint: "A steam-powered tragedy.", points: 3 },
+            { person: "Alexander Bogdanov (Russian Physician)", correct: "He died attempting to achieve eternal youth by performing a mutual blood transfusion with a student suffering from malaria and tuberculosis.", wrong1: "He froze to death attempting to hibernate in a block of ice.", wrong2: "He accidentally injected himself with glowing radium.", hint: "A terrible trade.", points: 2 },
+            { person: "Homer (Ancient Greek Poet)", correct: "According to legend, he died of intense grief and frustration because he was unable to solve a riddle posed by some local fishermen.", wrong1: "He was hit on the head by a falling olive branch while composing an epic poem.", wrong2: "He fell into an empty well because he was blind and completely lost his way.", hint: "Puzzled to death.", points: 2 },
+            { person: "Calchas (Greek Mythological Soothsayer)", correct: "He was told a prophecy he'd never drink his wine. When it seemed false, he laughed so hard just before taking a sip that he died.", wrong1: "He was struck by lightning immediately after predicting a perfectly sunny day.", wrong2: "He tripped into a sacrificial fire while looking the other way.", hint: "A laughable prediction.", points: 3 },
+            { person: "Philitas of Cos (Ancient Greek Poet)", correct: "He reportedly withered away and starved himself to death because he was obsessively researching the 'Liar Paradox'.", wrong1: "He was crushed under an impossibly tall stack of papyrus scrolls.", wrong2: "He fell into the sea while aggressively debating philosophy with a passing sailor.", hint: "A paradoxical passing.", points: 2 },
+            { person: "Heraclitus (Greek Philosopher)", correct: "To cure his dropsy, he covered himself entirely in cow dung and lay in the sun, but was completely unrecognized and eaten by wild dogs.", wrong1: "He held his breath underwater trying to prove all things flow like a river.", wrong2: "He stared at the sun for days trying to understand the nature of fire.", hint: "A crappy disguise.", points: 2 },
+            { person: "King John of England (1216)", correct: "He allegedly died of severe dysentery brought on by eating a massive 'surfeit of peaches' and drinking excessive amounts of new cider.", wrong1: "He lost his crown in the Wash and drowned trying to frantically dig it out of the mud.", wrong2: "He was shot with a crossbow by a peasant who was really bad at aiming at targets.", hint: "A fruity fatality.", points: 3 }
+        ];
+
+        // --- UTILS ---
+        const shuffleArray = (array) => {
+            const newArr = [...array];
+            for (let i = newArr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [newArr[i], newArr[j]] = [newArr[j], newArr[i]];
+            }
+            return newArr;
+        };
+
+        const TEAM_COLORS = [
+            { bg: 'bg-red-900', border: 'border-red-400', text: 'text-red-400', shadow: 'shadow-[0_0_10px_rgba(248,113,113,0.5)]' },
+            { bg: 'bg-blue-900', border: 'border-blue-400', text: 'text-blue-400', shadow: 'shadow-[0_0_10px_rgba(96,165,250,0.5)]' },
+            { bg: 'bg-green-900', border: 'border-green-400', text: 'text-green-400', shadow: 'shadow-[0_0_10px_rgba(74,222,128,0.5)]' },
+            { bg: 'bg-yellow-900', border: 'border-yellow-400', text: 'text-yellow-400', shadow: 'shadow-[0_0_10px_rgba(250,204,21,0.5)]' },
+            { bg: 'bg-orange-900', border: 'border-orange-400', text: 'text-orange-400', shadow: 'shadow-[0_0_10px_rgba(251,146,60,0.5)]' },
+            { bg: 'bg-cyan-900', border: 'border-cyan-400', text: 'text-cyan-400', shadow: 'shadow-[0_0_10px_rgba(34,211,238,0.5)]' },
+            { bg: 'bg-pink-900', border: 'border-pink-400', text: 'text-pink-400', shadow: 'shadow-[0_0_10px_rgba(244,114,182,0.5)]' }
+        ];
+
+        // --- STATE ---
+        let teams = [];
+        let questions = [];
+        let currentTeamIdx = 0;
+        let currentQuestionIdx = 0;
+        let currentOptions = [];
+        let turnPhase = 'reveal'; // reveal, guessing, gamble_offer, flipping_coin, result
+        let cardFlipped = false;
+        let showHint = false;
+
+        // --- DOM ELEMENTS ---
+        const views = {
+            setup: document.getElementById('setup-view'),
+            game: document.getElementById('game-view'),
+            gameover: document.getElementById('gameover-view')
+        };
+        const playersInput = document.getElementById('players-input');
+        const btnCreateTeams = document.getElementById('btn-create-teams');
+        const scoreboardContainer = document.getElementById('scoreboard-container');
+        const currentTeamName = document.getElementById('current-team-name');
+        const questionCounter = document.getElementById('question-counter');
+        const totalQuestions = document.getElementById('total-questions');
+        const cardContainer = document.getElementById('card-container');
+        const cardInner = document.getElementById('card-inner');
+        const victimName = document.getElementById('victim-name');
+        const interactionArea = document.getElementById('interaction-area');
+
+        // --- INITIALIZATION ---
+        function init() {
+            // Prepare questions
+            questions = shuffleArray(RAW_TRIVIA).map(q => ({
+                ...q,
+                options: shuffleArray([q.correct, q.wrong1, q.wrong2])
+            }));
+            totalQuestions.textContent = questions.length;
+
+            btnCreateTeams.addEventListener('click', handleCreateTeams);
+            cardContainer.addEventListener('click', handleCardClick);
+        }
+
+        // --- ACTIONS ---
+        function handleCreateTeams() {
+            const text = playersInput.value;
+            const names = text.split('\n').map(n => n.trim()).filter(n => n);
+            if (names.length === 0) return;
+
+            const shuffledNames = shuffleArray(names);
+            const numTeams = Math.ceil(shuffledNames.length / 4) || 1;
+            
+            teams = Array.from({ length: numTeams }, (_, i) => ({
+                id: i + 1,
+                name: `Team ${i + 1}`,
+                players: [],
+                score: 0,
+                color: TEAM_COLORS[i % TEAM_COLORS.length]
+            }));
+
+            shuffledNames.forEach((name, i) => {
+                teams[i % numTeams].players.push(name);
+            });
+
+            switchView('game');
+            updateGameUI();
+        }
+
+        function switchView(viewName) {
+            Object.values(views).forEach(v => v.classList.add('hidden'));
+            views[viewName].classList.remove('hidden');
+            if (viewName === 'game') views[viewName].classList.add('flex');
+            if (viewName === 'gameover') views[viewName].classList.add('flex');
+        }
+
+        function updateGameUI() {
+            const currentTeam = teams[currentTeamIdx];
+            const currentQ = questions[currentQuestionIdx];
+            currentOptions = currentQ.options;
+
+            // Scoreboard
+            scoreboardContainer.innerHTML = teams.map((t, i) => `
+                <div class="p-3 rounded-lg flex justify-between items-center transition-all ${i === currentTeamIdx ? `${t.color.bg} border-2 ${t.color.border} animate-bounce ${t.color.shadow}` : 'bg-slate-700 border-2 border-transparent'}">
+                    <div>
+                        <div class="font-bold ${i === currentTeamIdx ? t.color.text : 'text-slate-200'}">${t.name}</div>
+                        <div class="text-xs text-slate-400 truncate w-24" title="${t.players.join(', ')}">${t.players.join(', ')}</div>
+                    </div>
+                    <div class="text-xl font-black ${i === currentTeamIdx ? t.color.text : 'text-slate-200'}" id="score-team-${i}">${t.score}</div>
+                </div>
+            `).join('');
+
+            // Headers
+            currentTeamName.textContent = currentTeam.name;
+            currentTeamName.className = `font-bold text-3xl drop-shadow-[0_0_5px_currentColor] ${currentTeam.color.text}`;
+            questionCounter.textContent = currentQuestionIdx + 1;
+            victimName.textContent = currentQ.person;
+
+            renderInteractionArea();
+        }
+
+        function updateScoreInUIOnly() {
+            teams.forEach((t, i) => {
+                const el = document.getElementById(`score-team-${i}`);
+                if (el) el.textContent = t.score;
+            });
+        }
+
+        function applyScore(change) {
+            teams[currentTeamIdx].score += change;
+            updateScoreInUIOnly();
+        }
+
+        function handleCardClick() {
+            if (turnPhase === 'reveal' && !cardFlipped) {
+                cardFlipped = true;
+                cardInner.classList.add('rotate-y-180');
+                turnPhase = 'guessing';
+                renderInteractionArea();
+            }
+        }
+
+        function handleGuess(selectedOption) {
+            if (turnPhase !== 'guessing') return;
+            const currentQ = questions[currentQuestionIdx];
+            const isCorrect = selectedOption === currentQ.correct;
+
+            if (isCorrect) {
+                turnPhase = 'gamble_offer';
+                renderInteractionArea({ msg: `Correct! 💀 You secured ${currentQ.points} points.`, type: 'success' });
+            } else {
+                turnPhase = 'result';
+                renderInteractionArea({ msg: `Wrong! The correct answer was: "${currentQ.correct}". You get 0 points.`, pointsChange: 0, type: 'error' });
+            }
+        }
+
+        function handleRevealHint() {
+            showHint = true;
+            applyScore(-1); // Deduct 1 point immediately
+            renderInteractionArea();
+        }
+
+        function handleGambleDecision(gambleSide) {
+            const currentQ = questions[currentQuestionIdx];
+            const riskAmount = currentQ.points * 2; // Win or lose double the question points
+
+            if (!gambleSide) {
+                // Kept points
+                applyScore(currentQ.points);
+                turnPhase = 'result';
+                renderInteractionArea({ msg: `Played it safe! +${currentQ.points} Points.`, pointsChange: currentQ.points, type: 'success' });
+            } else {
+                // Gamble
+                turnPhase = 'flipping_coin';
+                renderInteractionArea({ msg: `Flipping for ${gambleSide.toUpperCase()}...` });
+                
+                setTimeout(() => {
+                    const isHeads = Math.random() > 0.5;
+                    const result = isHeads ? 'heads' : 'tails';
+                    
+                    if (gambleSide === result) {
+                        applyScore(riskAmount);
+                        turnPhase = 'result';
+                        renderInteractionArea({ 
+                            msg: `It's ${result.toUpperCase()}! You won the gamble! +${riskAmount} Points!`, 
+                            pointsChange: riskAmount, 
+                            type: 'success', 
+                            coin: result 
+                        });
+                    } else {
+                        applyScore(-riskAmount);
+                        turnPhase = 'result';
+                        renderInteractionArea({ 
+                            msg: `It's ${result.toUpperCase()}! You lost the gamble! -${riskAmount} Points!`, 
+                            pointsChange: -riskAmount, 
+                            type: 'error', 
+                            coin: result 
+                        });
+                    }
+                }, 2000);
+            }
+        }
+
+        function nextTurn() {
+            // 1. Burn up the old card
+            cardContainer.classList.add('animate-burn');
+            
+            // Clear the interaction area immediately so it feels like the turn is over
+            interactionArea.innerHTML = '';
+            
+            // 2. Wait for the burn animation to finish
+            setTimeout(() => {
+                // Reset card logic
+                cardFlipped = false;
+                cardInner.classList.remove('rotate-y-180');
+                turnPhase = 'reveal';
+                showHint = false;
+                
+                // Hide it instantly before resetting transform
+                cardContainer.style.opacity = '0';
+                cardContainer.classList.remove('animate-burn');
+                
+                if (currentQuestionIdx + 1 >= questions.length) {
+                    endGame();
+                } else {
+                    currentQuestionIdx++;
+                    currentTeamIdx = (currentTeamIdx + 1) % teams.length;
+                    updateGameUI();
+                    
+                    // 3. Deal the new card
+                    setTimeout(() => {
+                        cardContainer.style.opacity = ''; // let CSS handle opacity
+                        cardContainer.classList.add('animate-deal');
+                        
+                        // Cleanup deal class after animation completes
+                        setTimeout(() => {
+                            cardContainer.classList.remove('animate-deal');
+                        }, 650);
+                    }, 50); // slight delay to ensure DOM updates before animation
+                }
+            }, 800); // Matches the 0.8s of the burnUp animation
+        }
+
+        function endGame() {
+            switchView('gameover');
+            const sortedTeams = [...teams].sort((a, b) => b.score - a.score);
+            const container = document.getElementById('final-scores-container');
+            container.innerHTML = sortedTeams.map((t, idx) => `
+                <div class="flex justify-between items-center bg-slate-700 p-4 rounded-lg mb-3">
+                    <div>
+                        <span class="text-2xl font-bold mr-4">${idx === 0 ? '🏆' : '💀'} ${t.name}</span>
+                        <span class="text-slate-400 text-sm">${t.players.join(', ')}</span>
+                    </div>
+                    <span class="text-3xl font-black text-white">${t.score} pts</span>
+                </div>
+            `).join('');
+        }
+
+        // --- RENDERING VIEWS ---
+        function renderInteractionArea(data = {}) {
+            interactionArea.innerHTML = ''; // clear
+
+            if (turnPhase === 'guessing') {
+                const currentQ = questions[currentQuestionIdx];
+                const container = document.createElement('div');
+                container.className = 'flex flex-col gap-3 animate-fade-in w-full';
+
+                if (!showHint) {
+                    const hintBtn = document.createElement('button');
+                    hintBtn.className = 'mb-2 text-orange-400 hover:text-orange-300 underline font-bold text-center';
+                    hintBtn.textContent = 'Need a hint? (-1 Point)';
+                    hintBtn.onclick = handleRevealHint;
+                    container.appendChild(hintBtn);
+                } else {
+                    const hintDiv = document.createElement('div');
+                    hintDiv.className = 'mb-2 p-4 bg-orange-900/30 border border-orange-500 rounded-xl text-orange-200 italic text-center shadow-inner';
+                    hintDiv.innerHTML = `💡 <strong>Hint:</strong> ${currentQ.hint}`;
+                    container.appendChild(hintDiv);
+                }
+
+                currentOptions.forEach((opt, i) => {
+                    const btn = document.createElement('button');
+                    btn.className = 'w-full text-left p-4 bg-slate-800 hover:bg-slate-700 border border-slate-600 hover:border-orange-500 rounded-xl shadow-md transition-all text-slate-200 text-lg md:text-xl font-medium active:scale-[0.98]';
+                    btn.innerHTML = `<span class="font-bold text-teal-400 mr-3">${['A', 'B', 'C'][i]}.</span> ${opt}`;
+                    btn.onclick = () => handleGuess(opt);
+                    container.appendChild(btn);
+                });
+                interactionArea.appendChild(container);
+            }
+            else if (turnPhase === 'gamble_offer') {
+                const currentQ = questions[currentQuestionIdx];
+                interactionArea.innerHTML = `
+                    <div class="bg-slate-800 border-2 border-green-500 rounded-xl p-6 text-center shadow-lg animate-fade-in w-full">
+                        <h3 class="text-2xl font-bold text-green-400 mb-2">${data.msg}</h3>
+                        <p class="text-slate-300 mb-6">Do you want to gamble your points on a coin flip?<br><span class="text-sm text-slate-400">(Win = +${currentQ.points * 2}, Lose = -${currentQ.points * 2})</span></p>
+                        <div class="flex flex-col sm:flex-row justify-center gap-4">
+                            <button onclick="handleGambleDecision(null)" class="px-6 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg font-bold text-white transition-colors">
+                                Keep ${currentQ.points} Points
+                            </button>
+                            <button onclick="handleGambleDecision('heads')" class="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-400 hover:to-red-400 rounded-lg font-bold text-white shadow-lg transition-transform hover:scale-105">
+                                🪙 Gamble HEADS
+                            </button>
+                            <button onclick="handleGambleDecision('tails')" class="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-400 hover:to-red-400 rounded-lg font-bold text-white shadow-lg transition-transform hover:scale-105">
+                                🪙 Gamble TAILS
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+            else if (turnPhase === 'flipping_coin') {
+                interactionArea.innerHTML = `
+                    <div class="flex flex-col items-center justify-center p-8 w-full">
+                        <div class="text-6xl animate-bounce mb-4 shadow-xl rounded-full">🪙</div>
+                        <h3 class="text-2xl font-bold text-orange-400 animate-pulse-fast">${data.msg}</h3>
+                    </div>
+                `;
+            }
+            else if (turnPhase === 'result') {
+                let boxClass = 'bg-slate-800 border-slate-600';
+                let textClass = 'text-slate-300';
+                if (data.type === 'success') { boxClass = 'bg-slate-800 border-green-500'; textClass = 'text-green-400'; }
+                if (data.type === 'error') { boxClass = 'bg-red-900/30 border-red-500'; textClass = 'text-red-400'; }
+
+                let coinHtml = '';
+                if (data.coin) {
+                    coinHtml = `<div class="text-5xl mb-4">🪙 (${data.coin === 'heads' ? 'Heads' : 'Tails'})</div>`;
+                }
+
+                interactionArea.innerHTML = `
+                    <div class="border-2 rounded-xl p-6 text-center shadow-lg animate-fade-in w-full ${boxClass}">
+                        ${coinHtml}
+                        <h3 class="text-2xl font-bold mb-4 ${textClass}">${data.msg}</h3>
+                        <button onclick="nextTurn()" class="px-8 py-3 bg-teal-600 hover:bg-teal-500 rounded-lg font-bold text-white text-lg shadow-[0_0_10px_rgba(20,184,166,0.5)] transition-all active:scale-95">
+                            Next Turn ➔
+                        </button>
+                    </div>
+                `;
+            }
+        }
+
+        // Start
+        init();
+    </script>
+</body>
+</html>
